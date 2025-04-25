@@ -7,9 +7,24 @@ import { useTheme } from 'react-theme-master'
 import { Button } from '@/components/ui/button'
 import CodePreview from '@/components/code-preview'
 import ThemeShowcase from '@/components/theme-showcase'
+import AIIntroSection from '@/components/AIIntroSection'
+import { useState, useEffect } from 'react'
 
 export default function Home() {
   const { themeObject, theme } = useTheme()
+  const [chatOpen, setChatOpen] = useState(false)
+
+  // Function to open chat 
+  const openChat = () => {
+    // Set a variable that will be checked by the chat component to open automatically
+    window.localStorage.setItem('open-docs-chat', 'true')
+    
+    // Refresh the chat state via a custom event
+    const event = new CustomEvent('open-docs-chat')
+    window.dispatchEvent(event)
+    
+    setChatOpen(true)
+  }
 
   // Quick start code example
   const quickStartCode = `// 1. Install the package
@@ -179,6 +194,9 @@ export default function ThemedApp() {
           </div>
         </div>
       </section>
+
+      {/* Add the AI Chat Introduction Section */}
+      <AIIntroSection onOpenChat={openChat} />
 
       {/* Quick start section */}
       <section className={`py-16 px-4 ${themeObject.colors.primary}`}>

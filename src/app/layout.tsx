@@ -5,6 +5,7 @@ import { Providers } from '@/components/providers'
 import Header from '@/components/layout/header'
 import Footer from '@/components/layout/footer'
 import MobileWarning from '@/components/MobileWarning'
+import DocsAIChat from '@/components/DocsAIChat' 
 
 const wixMadeforDisplay = Wix_Madefor_Display({ 
   subsets: ['latin'],
@@ -31,7 +32,8 @@ export default function RootLayout({
               {children}
             </main>
             <Footer />
-            <MobileWarning/>  
+            <MobileWarning/>
+            <DocsAIChat /> 
           </div>
         </Providers>
       </body>
