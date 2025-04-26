@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useTheme } from 'react-theme-master'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Bot, Send, X, ChevronDown, Loader2, Lightbulb, RefreshCw } from 'lucide-react'
+import { Bot, Send, X, ChevronDown, Loader2, Lightbulb } from 'lucide-react'
 
 // Define message types
 interface Message {
@@ -45,7 +45,7 @@ export default function DocsAIChat() {
   const [showResetConfirmation, setShowResetConfirmation] = useState(false)
   const [messageCount, setMessageCount] = useState(0)
   const [hasReachedLimit, setHasReachedLimit] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   
   // Load chat history from localStorage on initial load
@@ -428,45 +428,94 @@ export default function DocsAIChat() {
   
   // Add syntax highlighting to code
   const formatCodeWithSyntaxHighlighting = (code: string, language: string) => {
-    // For simplicity, we're using a basic highlighting approach here
-    // In a production app, you might want to use a library like Prism or Shiki
-    
+    // For production use, we'll use a more robust approach
     if (['js', 'jsx', 'javascript', 'typescript', 'tsx'].includes(language)) {
-      // Tokenize JavaScript/TypeScript code
-      return jsTokenizer(code);
+      return highlightCodeSafely(code);
     }
     
-    // For other languages or if language not specified, return as is
+    // For other languages, just return the code as is
     return code;
   }
   
-  // Simple JavaScript/TypeScript tokenizer
-  const jsTokenizer = (code: string) => {
-    // Define regex patterns for different token types
-    const patterns = [
-      { pattern: /(\/\/.*$)/gm, className: 'text-gray-500 italic' }, // Comments
-      { pattern: /(['"`])(.*?)\1/gm, className: 'text-green-500' }, // Strings
-      { pattern: /\b(new|return|if|else|for|while|function|class|import|export|from|const|let|var|extends|async|await)\b/g, className: 'text-purple-500 font-medium' }, // Keywords
-      { pattern: /\b(true|false|null|undefined|this)\b/g, className: 'text-yellow-600' }, // Constants
-      { pattern: /\b(\d+(\.\d+)?)\b/g, className: 'text-orange-500' }, // Numbers
-      { pattern: /(\{|\}|\(|\)|\[|\]|;|,|\.)/g, className: 'text-gray-500' }, // Punctuation
-      { pattern: /(\+|\-|\*|\/|\%|\=|\&\&|\|\||\!|\?|\<|\>)/g, className: 'text-yellow-500' }, // Operators
-      { pattern: /\b([A-Z][a-zA-Z0-9_]*)\b/g, className: 'text-yellow-300' }, // Class names (capitalized)
-      { pattern: /\.([a-zA-Z][a-zA-Z0-9_]*)\b/g, className: 'text-blue-400' }, // Object properties
-      { pattern: /\b([a-zA-Z][a-zA-Z0-9_]*)\(/g, className: 'text-blue-500' }, // Function calls
+  // A more robust code highlighting approach
+  const highlightCodeSafely = (code: string) => {
+    // Define token types and their colors
+    type Token = {
+      type: string;
+      value: string;
+      className: string;
+    };
+    
+    // Tokenize the code
+    const tokens: Token[] = [];
+    let remaining = code;
+    let position = 0;
+    
+    // Define token patterns in order of precedence
+    const tokenPatterns = [
+      { type: 'comment', pattern: /^(\/\/.*$|\/\*[\s\S]*?\*\/)/m, className: 'text-gray-500 italic' },
+      { type: 'string', pattern: /^(['"`])(?:\\.|[^\\])*?\1/, className: 'text-green-500' },
+      { type: 'keyword', pattern: /^(new|return|if|else|for|while|function|class|import|export|from|const|let|var|extends|async|await)\b/, className: 'text-purple-500 font-medium' },
+      { type: 'constant', pattern: /^(true|false|null|undefined|this)\b/, className: 'text-yellow-600' },
+      { type: 'number', pattern: /^(\d+(\.\d+)?)/, className: 'text-orange-500' },
+      { type: 'punctuation', pattern: /^(\{|\}|\(|\)|\[|\]|;|,|\.)/, className: 'text-gray-500' },
+      { type: 'operator', pattern: /^(\+|\-|\*|\/|\%|\=|\&\&|\|\||\!|\?|\<|\>)/, className: 'text-yellow-500' },
+      { type: 'className', pattern: /^([A-Z][a-zA-Z0-9_]*)/, className: 'text-yellow-300' },
+      { type: 'property', pattern: /^\.([a-zA-Z][a-zA-Z0-9_]*)/, className: 'text-blue-400' },
+      { type: 'function', pattern: /^([a-zA-Z][a-zA-Z0-9_]*)\(/, className: 'text-blue-500' },
+      { type: 'identifier', pattern: /^([a-zA-Z][a-zA-Z0-9_]*)/, className: 'text-gray-300' },
+      { type: 'whitespace', pattern: /^(\s+)/, className: '' },
+      { type: 'other', pattern: /^(.)/, className: '' } // Catch any other character
     ];
     
-    // Create a marked-up version of the code
-    let result = code;
-    
-    // Apply patterns
-    for (const { pattern, className } of patterns) {
-      result = result.replace(pattern, match => `<span class="${className}">${match}</span>`);
+    // Process the code
+    while (remaining.length > 0) {
+      let matched = false;
+      
+      for (const { type, pattern, className } of tokenPatterns) {
+        const match = remaining.match(pattern);
+        if (match && match[0]) {
+          const value = match[0];
+          if (type !== 'whitespace' || value.includes('\n')) {
+            tokens.push({ type, value, className });
+          } else {
+            // For non-newline whitespace, just push it without a class
+            tokens.push({ type, value, className: '' });
+          }
+          
+          remaining = remaining.slice(value.length);
+          position += value.length;
+          matched = true;
+          break;
+        }
+      }
+      
+      // Safety check
+      if (!matched) {
+        remaining = remaining.slice(1);
+        position += 1;
+      }
     }
     
-    // Return the tokenized code as dangerously set HTML
-    // This is safe in this context as we're only formatting code that came from our controlled API
-    return <div dangerouslySetInnerHTML={{ __html: result }} />;
+    // Render tokens to React elements
+    return (
+      <React.Fragment>
+        {tokens.map((token, index) => {
+          if (token.value === '\n') {
+            return <br key={index} />;
+          }
+          
+          // Apply syntax highlighting class if present
+          return token.className ? (
+            <span key={index} className={token.className}>
+              {token.value}
+            </span>
+          ) : (
+            token.value
+          );
+        })}
+      </React.Fragment>
+    );
   }
 
   return (
@@ -478,9 +527,9 @@ export default function DocsAIChat() {
         aria-label="Chat with documentation AI"
       >
         {isOpen ? (
-          <X className="h-6 w-6" />
+         <X className= 'h-6 w-6' />
         ) : (
-          <Bot className="h-6 w-6" />
+        <Bot className='h-6 w-6'/>
         )}
       </button>
 
@@ -497,22 +546,11 @@ export default function DocsAIChat() {
             onClick={minimizeChat}
           >
             <div className="flex items-center">
-              <Bot className="mr-2 h-5 w-5" />
+            <Bot className={`mr-2 h-5 w-5 ${themeObject.colors.text}`} />
               <h3 className={`font-medium ${themeObject.colors.text}`}>React Theme Master AI</h3>
             </div>
             <div className="flex items-center space-x-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleReset()
-                }}
-                title="Reset conversation"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
+           
               <Button
                 variant="ghost"
                 size="sm"
@@ -520,7 +558,7 @@ export default function DocsAIChat() {
                 onClick={minimizeChat}
                 title={isMinimized ? "Expand" : "Minimize"}
               >
-                <ChevronDown className={`h-4 w-4 transition-transform ${isMinimized ? 'rotate-180' : ''}`} />
+                 <ChevronDown className={`h-4 w-4 transition-transform ${isMinimized ? 'rotate-180' : ''} ${themeObject.colors.text}`} />
               </Button>
               <Button
                 variant="ghost"
@@ -532,7 +570,7 @@ export default function DocsAIChat() {
                 }}
                 title="Close"
               >
-                <X className="h-4 w-4" />
+                <X className={`h-4 w-4 ${themeObject.colors.text}`} />
               </Button>
             </div>
           </div>
@@ -543,34 +581,41 @@ export default function DocsAIChat() {
               {/* Chat messages */}
               <ScrollArea className="flex-1 px-4 pt-6 pb-4 overflow-y-auto">
                 <div className="space-y-4">
-                  {messages.map((message, index) => (
-                    <div
-                      key={index}
-                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`relative max-w-[80%] px-4 py-2 rounded-lg ${
-                          message.role === 'user'
-                            ? `${themeObject.colors.accent} ml-12`
-                            : `${themeObject.colors.secondary} mr-12`
-                        }`}
-                      >
-                        {message.role === 'assistant' && (
-                          <div className="absolute left-2 top-0 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center bg-blue-500 text-white">
-                            <Bot className="h-4 w-4" />
-                          </div>
-                        )}
-                        
-                        <div className={`${themeObject.colors.text}`}>
-                          {formatMessage(message.content)}
-                        </div>
-                        
-                        <div className={`text-xs mt-1 text-right ${themeObject.colors.textMuted}`}>
-                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                {messages.map((message, index) => (
+  <div
+    key={index}
+    className="w-full mb-4"
+  >
+    {/* Message alignment wrapper */}
+    <div className={`flex w-full ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+      {/* Message bubble with fixed positioning */}
+      <div
+        className={`relative w-4/5 max-w-[80%] px-4 py-2 rounded-lg ${
+          message.role === 'user'
+            ? `${themeObject.colors.accent}`
+            : `${themeObject.colors.secondary} pl-10`
+        }`}
+      >
+        {/* Bot icon for assistant messages */}
+        {message.role === 'assistant' && (
+          <div className="absolute left-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-blue-500 text-white">
+            <Bot className="h-4 w-4" />
+          </div>
+        )}
+        
+        {/* Message content with word break */}
+        <div className={`${themeObject.colors.text} break-words`}>
+          {formatMessage(message.content)}
+        </div>
+        
+        {/* Message timestamp */}
+        <div className={`text-xs mt-1 text-right ${themeObject.colors.textMuted}`}>
+          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </div>
+      </div>
+    </div>
+  </div>
+))}
                   
                   {/* Loading indicator */}
                   {isLoading && (
@@ -613,31 +658,50 @@ export default function DocsAIChat() {
 
               {/* Chat input */}
               <form 
-                onSubmit={handleSendMessage}
-                className={`p-4 border-t ${themeObject.colors.border} mt-auto`}
-              >
-                <div className="flex items-center space-x-2">
-                  <Input
-                    ref={inputRef}
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask anything about React Theme Master..."
-                    className={`flex-1 ${themeObject.colors.primary} ${themeObject.colors.border} ${themeObject.colors.text}`}
-                    disabled={isLoading}
-                  />
-                  <Button 
-                    type="submit" 
-                    className={themeObject.colors.button}
-                    disabled={isLoading || !input.trim()}
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className={`text-xs mt-2 text-center ${themeObject.colors.textMuted}`}>
-                  Powered by AI. Responses may not always be accurate.
-                </div>
-              </form>
+  onSubmit={handleSendMessage}
+  className={`p-4 border-t ${themeObject.colors.border} mt-auto`}
+>
+  <div className="flex items-center space-x-2">
+    <textarea
+      ref={inputRef}
+      value={input}
+      onChange={(e) => setInput(e.target.value)}
+      placeholder="Ask anything about React Theme Master..."
+      className={`flex-1 resize-none rounded-md px-3 py-2 min-h-[40px] max-h-[120px] ${themeObject.colors.primary} ${themeObject.colors.border} ${themeObject.colors.text}`}
+      disabled={isLoading}
+      maxLength={500}
+      rows={1}
+      onInput={(e) => {
+        // Auto resize based on content
+        e.currentTarget.style.height = 'auto';
+        e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 120)}px`;
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleSendMessage();
+        }
+      }}
+    />
+    <div className="flex flex-col">
+      <Button 
+        type="submit" 
+        className={themeObject.colors.button}
+        disabled={isLoading || !input.trim()}
+      >
+        <Send className="h-4 w-4" />
+      </Button>
+      {input.length > 0 && (
+        <div className={`text-xs mt-1 text-right ${themeObject.colors.textMuted}`}>
+          {input.length}/500
+        </div>
+      )}
+    </div>
+  </div>
+  <div className={`text-xs mt-2 text-center ${themeObject.colors.textMuted}`}>
+    Powered by AI. Responses may not always be accurate.
+  </div>
+</form>
             </div>
           )}
         </div>
